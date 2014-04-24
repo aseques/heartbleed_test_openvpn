@@ -208,7 +208,9 @@ def main():
     
         print hexdump(heartbleed[0:100], 16)
     except socket.timeout:
-        print target + '|NOT AVAILABLE'
+        print target + '|NOT AVAILABLE (timeout)'
+    except socket.error:
+        print target + '|NOT AVAILABLE (error)'
 
 if __name__ == '__main__':
     main()
